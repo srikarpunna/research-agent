@@ -39,13 +39,20 @@ class ResearchWorkflow:
         os.environ['TAVILY_API_KEY'] = settings.tavily_api_key
         os.environ['GOOGLE_API_KEY'] = settings.google_api_key
         
-        self.llm = ChatGoogleGenerativeAI(
-            model=settings.llm_model,
-            temperature=0.1,  # Lower temperature for strict format adherence
-            max_output_tokens=settings.max_tokens,
-            google_api_key=settings.google_api_key,
-            convert_system_message_to_human=True
-        )
+        # Initialize LLM with proper error handling
+        try:
+            self.llm = ChatGoogleGenerativeAI(
+                model=settings.llm_model,
+                temperature=0.1,
+                max_output_tokens=settings.max_tokens,
+                google_api_key=settings.google_api_key,
+                convert_system_message_to_human=True,
+                streaming=False  # Disable streaming for stability
+            )
+            logger.info(f"Initialized LLM with model: {settings.llm_model}")
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM: {str(e)}")
+            raise
         
         # Initialize tools
         self.search_tool = ResearchSearchTool(
