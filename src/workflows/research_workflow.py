@@ -42,7 +42,7 @@ class ResearchWorkflow:
         # Initialize LLM with proper error handling
         try:
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",  # Use latest flash model
+                model=settings.llm_model,
                 temperature=settings.llm_temperature,
                 max_output_tokens=settings.max_tokens,
                 google_api_key=settings.google_api_key,
