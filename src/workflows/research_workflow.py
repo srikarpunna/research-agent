@@ -43,11 +43,10 @@ class ResearchWorkflow:
         try:
             self.llm = ChatGoogleGenerativeAI(
                 model=settings.llm_model,
-                temperature=0.1,
+                temperature=0.7,  # Use temperature from settings
                 max_output_tokens=settings.max_tokens,
                 google_api_key=settings.google_api_key,
-                convert_system_message_to_human=True,
-                transport="rest"  # Use REST API instead of gRPC for better compatibility
+                convert_system_message_to_human=True
             )
             logger.info(f"Initialized LLM with model: {settings.llm_model}")
         except Exception as e:
@@ -127,32 +126,37 @@ Question: {input}
     
     def _setup_writer_agent(self):
         """Configure the content writer with structured output"""
-        # Create parser for LinkedIn post structure
-        parser = PydanticOutputParser(pydantic_object=LinkedInPost)
-        
-        # Add format instructions to the prompt
+        # Simple prompt template without format instructions
         template = f"""{WRITER_SYSTEM_PROMPT}
 
-{WRITER_TASK_TEMPLATE}
+{WRITER_TASK_TEMPLATE}"""
 
-CRITICAL: You MUST respond with ONLY valid JSON matching this exact format:
-{{format_instructions}}
-
-Do not include any other text, explanations, or markdown. Only the JSON object."""
-        
         self.writer_prompt = PromptTemplate(
             template=template,
-            input_variables=["research_report", "topic"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
+            input_variables=["research_report", "topic"]
         )
-        
-        # Try structured output first, fallback to parsing
+
+        # Use Gemini's native structured output
         try:
-            # Use Gemini's native structured output if available
-            structured_llm = self.llm.with_structured_output(LinkedInPost)
+            structured_llm = self.llm.with_structured_output(
+                LinkedInPost,
+                method="json_mode"  # Use JSON mode for better compatibility
+            )
             self.writer_chain = self.writer_prompt | structured_llm
-        except:
-            # Fallback to manual parsing
+            logger.info("Initialized writer with structured output (JSON mode)")
+        except Exception as e:
+            logger.warning(f"Could not use structured output, falling back to parser: {e}")
+            # Fallback to parsing
+            parser = PydanticOutputParser(pydantic_object=LinkedInPost)
+            template_with_format = f"""{template}
+
+CRITICAL: You MUST respond with ONLY valid JSON matching this exact format:
+{{format_instructions}}"""
+            self.writer_prompt = PromptTemplate(
+                template=template_with_format,
+                input_variables=["research_report", "topic"],
+                partial_variables={"format_instructions": parser.get_format_instructions()}
+            )
             self.writer_chain = self.writer_prompt | self.llm | parser
     
     def execute(self, topic: str) -> dict:
@@ -201,27 +205,39 @@ Do not include any other text, explanations, or markdown. Only the JSON object."
             
             # Stage 2: Content Generation
             logger.info("Stage 2: Generating LinkedIn post...")
-            post_structured = self.writer_chain.invoke({
-                "research_report": research_report,
-                "topic": topic
-            })
-            
-            # Convert structured output to formatted text
-            if isinstance(post_structured, LinkedInPost):
-                linkedin_post = post_structured.format_for_linkedin()
-            elif isinstance(post_structured, str):
-                # Try to parse JSON if we got a string
-                try:
-                    post_dict = json.loads(post_structured)
-                    post_obj = LinkedInPost(**post_dict)
+            try:
+                post_structured = self.writer_chain.invoke({
+                    "research_report": research_report,
+                    "topic": topic
+                })
+
+                # Convert structured output to formatted text
+                if isinstance(post_structured, LinkedInPost):
+                    linkedin_post = post_structured.format_for_linkedin()
+                    logger.info("Successfully generated structured LinkedIn post")
+                elif isinstance(post_structured, dict):
+                    # Convert dict to LinkedInPost
+                    post_obj = LinkedInPost(**post_structured)
                     linkedin_post = post_obj.format_for_linkedin()
-                except:
-                    # Fallback to raw string
-                    linkedin_post = post_structured
-            else:
-                linkedin_post = str(post_structured)
-            
-            logger.info(f"LinkedIn post generated. Length: {len(linkedin_post)} chars")
+                    logger.info("Generated LinkedIn post from dict")
+                elif isinstance(post_structured, str):
+                    # Try to parse JSON if we got a string
+                    try:
+                        post_dict = json.loads(post_structured)
+                        post_obj = LinkedInPost(**post_dict)
+                        linkedin_post = post_obj.format_for_linkedin()
+                        logger.info("Generated LinkedIn post from JSON string")
+                    except Exception as parse_error:
+                        logger.warning(f"Could not parse JSON, using raw string: {parse_error}")
+                        linkedin_post = post_structured
+                else:
+                    linkedin_post = str(post_structured)
+                    logger.warning("Using stringified output")
+
+                logger.info(f"LinkedIn post generated. Length: {len(linkedin_post)} chars")
+            except Exception as gen_error:
+                logger.error(f"Error generating LinkedIn post: {str(gen_error)}")
+                raise
             
             # Stage 3: Validation
             logger.info("Stage 3: Validating output...")
