@@ -44,9 +44,7 @@ class ResearchWorkflow:
             temperature=0.1,  # Lower temperature for strict format adherence
             max_output_tokens=settings.max_tokens,
             google_api_key=settings.google_api_key,
-            convert_system_message_to_human=True,
-            top_p=0.85,  # More focused responses
-            top_k=20     # Limit token sampling for consistency
+            convert_system_message_to_human=True
         )
         
         # Initialize tools
