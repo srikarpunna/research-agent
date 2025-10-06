@@ -47,7 +47,7 @@ class ResearchWorkflow:
                 max_output_tokens=settings.max_tokens,
                 google_api_key=settings.google_api_key,
                 convert_system_message_to_human=True,
-                streaming=False  # Disable streaming for stability
+                transport="rest"  # Use REST API instead of gRPC for better compatibility
             )
             logger.info(f"Initialized LLM with model: {settings.llm_model}")
         except Exception as e:
