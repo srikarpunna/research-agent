@@ -3,7 +3,10 @@ Tavily search tool wrapper.
 Returns AI-optimized, clean search results without HTML noise.
 """
 
-from langchain_community.tools.tavily_search import TavilySearchResults
+try:
+    from langchain_tavily import TavilySearchResults
+except ImportError:
+    from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import Tool
 from typing import List, Dict
 import logging

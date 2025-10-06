@@ -42,8 +42,8 @@ class ResearchWorkflow:
         # Initialize LLM with proper error handling
         try:
             self.llm = ChatGoogleGenerativeAI(
-                model=settings.llm_model,
-                temperature=0.7,  # Use temperature from settings
+                model="gemini-2.0-flash",  # Use latest flash model
+                temperature=settings.llm_temperature,
                 max_output_tokens=settings.max_tokens,
                 google_api_key=settings.google_api_key,
                 convert_system_message_to_human=True
@@ -138,12 +138,9 @@ Question: {input}
 
         # Use Gemini's native structured output
         try:
-            structured_llm = self.llm.with_structured_output(
-                LinkedInPost,
-                method="json_mode"  # Use JSON mode for better compatibility
-            )
+            structured_llm = self.llm.with_structured_output(LinkedInPost)
             self.writer_chain = self.writer_prompt | structured_llm
-            logger.info("Initialized writer with structured output (JSON mode)")
+            logger.info("Initialized writer with structured output")
         except Exception as e:
             logger.warning(f"Could not use structured output, falling back to parser: {e}")
             # Fallback to parsing
